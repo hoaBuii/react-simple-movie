@@ -1,73 +1,88 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useState } from "react";
 import MovieList from "../components/movie/MovieList";
-import { fetcher } from "../config";
+import { fetcher, tmdbAPI } from "../config";
 import useSWR from "swr";
 import MovieCard from "../components/movie/MovieCard";
 import lodash from "lodash";
+import ReactPaginate from "react-paginate";
+import { useLockBodyScroll } from "@uidotdev/usehooks";
 
-const pageCount = 5;
+const itemsPerPage = 20;
+const pageRangeDisplayed = 3;
 
 const MoviePage = () => {
+  const [itemOffset, setItemOffset] = useState(0);
+  const [pageCount, setPageCount] = useState(0);
+  const endOffset = itemOffset + itemsPerPage;
+
+  // -----------------------------------------------------------------------------------------------------------
+
   const [nextPage, setNextPage] = useState(1);
   const [filter, setFilter] = useState("");
-  const [url, setUrl] = useState(
-    `https://api.themoviedb.org/3/movie/popular?api_key=a0d7e56f44a096c3b74ae90a43529eeb&page=${nextPage}`
-  );
+  const [url, setUrl] = useState(tmdbAPI.getMovieList("popular", nextPage));
 
   const handleFilterChange = (e) => {
-    setFilter(() => {
-      let currentFilter = e.target.value;
-      if (currentFilter) {
-        setUrl(
-          `https://api.themoviedb.org/3/search/movie?api_key=a0d7e56f44a096c3b74ae90a43529eeb&query=${currentFilter}&page=${nextPage}`
-        );
-      } else {
-        setUrl(
-          `https://api.themoviedb.org/3/movie/popular?api_key=a0d7e56f44a096c3b74ae90a43529eeb&page=${nextPage}`
-        );
-        setNextPage(1);
-      }
-      return currentFilter;
-    });
+    setFilter(e.target.value);
   };
 
-  // useEffect(() => {
-  //   setUrl(
-  //     `https://api.themoviedb.org/3/search/movie?api_key=a0d7e56f44a096c3b74ae90a43529eeb&query=${filter}&page=${nextPage}`
-  //   );
-  // }, [nextPage]);
+  // const onChangePage = (value) => {
+  //   debugger;
+  //   let currentNextPage = value + 1;
 
-  const onChangePage = (type) => {
-    if (type === "add") {
-      setNextPage(() => {
-        let currentNextPage = nextPage + 1;
-        setUrl(
-          `https://api.themoviedb.org/3/search/movie?api_key=a0d7e56f44a096c3b74ae90a43529eeb&query=${filter}&page=${currentNextPage}`
-        );
-        return currentNextPage;
-      });
-    } else if (type === "substract" && nextPage > 1) {
-      setNextPage(() => {
-        let currentNextPage = nextPage - 1;
-        setUrl(
-          `https://api.themoviedb.org/3/search/movie?api_key=a0d7e56f44a096c3b74ae90a43529eeb&query=${filter}&page=${currentNextPage}`
-        );
-        return currentNextPage;
-      });
-    } else {
-      setNextPage(1);
-    }
-  };
+  //   setNextPage(() => {
+  //     if (filter) {
+  //       setUrl(
+  //         `https:api.themoviedb.org/3/search/movie?api_key=a0d7e56f44a096c3b74ae90a43529eeb&query=${filter}&page=${currentNextPage}`
+  //       );
+  //     } else {
+  //       setUrl(
+  //         `https:api.themoviedb.org/3/movie/popular?api_key=a0d7e56f44a096c3b74ae90a43529eeb&page=${currentNextPage}`
+  //       );
+  //     }
+  //     return currentNextPage;
+  //   });
+  // };
   const { data, error } = useSWR(url, fetcher);
-  const loading = !data;
+  const loading = !data && !error;
+
+  //REACT PAGINATION
+  useLayoutEffect(() => {
+    if (filter) {
+      setUrl(tmdbAPI.getMovieSearch(filter, nextPage));
+    } else {
+      setUrl(tmdbAPI.getMovieList("popular", nextPage));
+    }
+  }, [filter, nextPage]);
+
+  useLayoutEffect(() => {
+    if (data && data.total_results) {
+      let currentPageCount = Math.ceil(data?.total_results / itemsPerPage);
+      setPageCount(currentPageCount);
+    }
+  }, [data, itemOffset]);
+
+  //khong khai bao ham useEffect sau (dieu kien if va return)
+  //ham return dan den loi trong code
+  // if (!data) return null;
+
+  const handlePageClick = (event) => {
+    const newOffset = (event.selected * itemsPerPage) % data?.total_pages;
+    console.log(
+      `User requested page number ${
+        event.selected + 1
+      }, which is offset ${newOffset}`
+    );
+    setItemOffset(newOffset);
+    setNextPage(event.selected + 1);
+  };
+
+  // --------------------------------------------------------------------------------------------------------------
 
   // if (!data) return null;
   const movies = data?.results || [];
-  const { page, total_pages } = data || {};
-  console.log("Page ~", page);
-  console.log("Total pages ~", total_pages);
-  console.log("Movies ~ ", movies);
+  // const { page, total_pages } = data || {};
 
+  console.log("Filter Data ~ ", filter);
   return (
     <div className="py-10 page-container">
       <div className="flex mb-10">
@@ -109,7 +124,21 @@ const MoviePage = () => {
             <MovieCard key={item.id} item={item}></MovieCard>
           ))}
       </div>
-      <div className="flex items-center justify-center mt-10 gap-x-5">
+
+      <div className="mt-10">
+        <ReactPaginate
+          breakLabel="..."
+          nextLabel="next >"
+          onPageChange={handlePageClick}
+          pageRangeDisplayed={5}
+          pageCount={pageCount}
+          previousLabel="< previous"
+          renderOnZeroPageCount={null}
+          className="pagination"
+        />
+      </div>
+
+      {/* <div className="flex items-center justify-center mt-10 gap-x-5 ">
         <span
           className="cursor-pointer z-10"
           onClick={() => onChangePage("substract")}
@@ -151,7 +180,7 @@ const MoviePage = () => {
             />
           </svg>
         </span>
-      </div>
+      </div> */}
     </div>
   );
 };
